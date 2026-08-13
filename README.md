@@ -13,3 +13,19 @@ Refer to this [issue](https://github.com/roger-/pyrtlsdr/issues/7#issuecomment-4
 * On Windows, it gets automatically installed while using ```pip install pyrtlsdr```
 
 Note: After installing, make sure PATH has been define accordingly, for example: ```export LD_LIBRARY_PATH="/usr/local/lib"```
+
+## Compatibility with older RTL-SDR hardware
+
+Some older RTL-SDR dongles (particularly R828D-based variants without bias-T) are incompatible
+with librtlsdr's asynchronous USB transfer mode, which queues 32 concurrent transfers. These
+devices return `LIBUSB_ERROR_BUSY` errors, causing I2C communication failures and crashes.
+
+To support these devices, this fork uses synchronous USB reads (`rtlsdr_read_sync` via
+`pyrtlsdr.read_samples()`) instead of the original asynchronous path. This works correctly
+across all tested hardware but loads all samples into memory before writing to disk, rather
+than streaming. At the default 2.048 MHz sample rate, a 10-second scan uses ~328 MB of RAM.
+This is well within normal limits — DAB PPM calibration only requires a few seconds of data.
+
+Additionally, `get_fft()` now casts uint8 data to float before applying the ADC offset to
+prevent an overflow error, and channel scanning includes per-channel error handling so one
+failed channel does not abort the entire scan.
