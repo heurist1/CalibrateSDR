@@ -86,10 +86,10 @@ def record_with_rtlsdr(sdr, rs, cf, ns, rg, filename):
     sdr.fc = cf
     sdr.gain = rg
 
-    # FIX: Use read_samples() instead of read_bytes_async() for compatibility with older RTL-SDR variants.
+    # FIX: Use read_samples() instead of read_bytes_async() for compatibility with some R828D-based devices.
     # read_bytes_async() uses rtlsdr_read_async() which queues 32 concurrent USB transfers.
-    # Some older R828D-based dongles return LIBUSB_ERROR_BUSY (-6) on these concurrent transfers,
-    # causing I2C errors and an access violation crash in rtlsdr_close().
+    # Some R828D dongles (e.g. certain no bias-T variants) return LIBUSB_ERROR_BUSY (-6) on
+    # these concurrent transfers, causing I2C errors and an access violation crash in rtlsdr_close().
     # read_samples() uses rtlsdr_read_sync() which issues a single blocking USB read with no
     # concurrency issues. The complex float output is converted back to uint8 IQ for file compatibility.
     samples = sdr.read_samples(ns)

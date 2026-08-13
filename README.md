@@ -14,11 +14,13 @@ Refer to this [issue](https://github.com/roger-/pyrtlsdr/issues/7#issuecomment-4
 
 Note: After installing, make sure PATH has been define accordingly, for example: ```export LD_LIBRARY_PATH="/usr/local/lib"```
 
-## Compatibility with older RTL-SDR hardware
+## Compatibility with some R828D-based RTL-SDR devices
 
-Some older RTL-SDR dongles (particularly R828D-based variants without bias-T) are incompatible
-with librtlsdr's asynchronous USB transfer mode, which queues 32 concurrent transfers. These
-devices return `LIBUSB_ERROR_BUSY` errors, causing I2C communication failures and crashes.
+Problems have been observed with some R828D-based RTL-SDR dongles (e.g. certain no bias-T
+variants) when using librtlsdr's asynchronous USB transfer mode, which queues 32 concurrent
+transfers. These devices return `LIBUSB_ERROR_BUSY` errors, causing I2C communication failures
+and crashes. The root cause is likely an interaction between the specific RTL-SDR PCB revision,
+the USB host controller, and the driver stack, rather than age alone.
 
 To support these devices, this fork uses synchronous USB reads (`rtlsdr_read_sync` via
 `pyrtlsdr.read_samples()`) instead of the original asynchronous path. This works correctly
