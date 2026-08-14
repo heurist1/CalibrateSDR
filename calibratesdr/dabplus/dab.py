@@ -5,7 +5,10 @@ import calibratesdr as cali
 def get_ppm(data, samplerate = 2048000, show_graph = False, verbose=False):
     adc_offset = -127
 
-    data_slice = (adc_offset + data[0:: 2]) + 1j * (adc_offset + data[1:: 2])
+    # FIX: .astype(float) needed before adding int to uint8 array to avoid overflow error.
+    # load_data() returns a uint8 memmap, and numpy >= 2 raises
+    # "Python integer -127 out of bounds for uint8" on int + uint8.
+    data_slice = (adc_offset + data[0:: 2].astype(float)) + 1j * (adc_offset + data[1:: 2].astype(float))
 
     signal = np.abs(data_slice)
 
