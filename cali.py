@@ -47,7 +47,39 @@ def main(input):
 
         print("scanning...")
 
-        if mode == "dab":
+        if mode == "robust":
+            print("starting mode: robust DAB PPM")
+
+            from rtlsdr import RtlSdr
+            filename = "tmp.dat"
+            device = input["rd"]
+            sdr = RtlSdr(device_index=device)
+            rs = input["rs"]
+            rg = input["rg"]
+            ns = int(rs * input["nsec"])
+            c = input["c"]
+
+            if c == "all":
+                raise ValueError("robust mode requires one channel, for example -c 29")
+
+            channel = int(c)
+            dabchannels = cali.dabplus.dab.channels()
+            cf = dabchannels["dab"][channel]["f_center"]
+            block = dabchannels["dab"][channel]["block"]
+            cali.utils.record_with_rtlsdr(sdr, rs, cf, ns, rg, filename, input["offset"])
+            data = cali.utils.load_data(filename, offset=0)
+            ppm, frames, residual = cali.dabplus.dab.get_ppm_robust(data, samplerate=rs)
+
+            try:
+                sdr.close()
+            except Exception:
+                pass
+
+            print("channel", channel, block, "at", cf, "Hz")
+            print("robust frames used:", frames, "timing residual:", residual, "samples")
+            print("robust PPM:", ppm)
+
+        elif mode == "dab":
             print("starting mode: dab")
 
             from rtlsdr import RtlSdr
@@ -159,7 +191,7 @@ if __name__ == "__main__":
                            help='select path to input file')
     my_parser.add_argument('-m',
                            action='store',
-                           choices=['dab', 'dvbt', 'gsm'],
+                           choices=['dab', 'robust', 'dvbt', 'gsm'],
                            help='select mode',
                            default='dab')
     my_parser.add_argument('-s',

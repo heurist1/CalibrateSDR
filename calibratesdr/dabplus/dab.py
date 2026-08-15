@@ -178,6 +178,95 @@ def get_ppm(data, samplerate = 2048000, show_graph = False, verbose=False):
     return ppm
 
 
+def get_ppm_robust(data, samplerate=2048000):
+    """Estimate PPM from repeated DAB frame timing.
+
+    This uses the known 96 ms frame period to track null-symbol positions
+    across the complete capture, then fits one timing slope after rejecting
+    bad frame detections. It is intended for lower-SNR tuners where the
+    independent peak selection in get_ppm() can lock onto noise.
+    """
+    adc_offset = -127
+    samples = (data[0::2].astype(float) + adc_offset) + \
+              1j * (data[1::2].astype(float) + adc_offset)
+    signal = cali.utils.movingaverage(np.abs(samples), 80)
+
+    frame_samples = samplerate * 0.096
+    null_samples = int(2656 * samplerate / 2048000.0)
+    frame_count = int((len(signal) - null_samples) // frame_samples)
+
+    if frame_count < 10:
+        return None, 0, None
+
+    # Score every possible frame phase using the mean energy in its nulls.
+    null_energy = np.convolve(signal, np.ones(null_samples) / null_samples, 'same')
+    phase_step = max(1, int(frame_samples // 512))
+    phases = range(0, int(frame_samples), phase_step)
+    best_phase = None
+    best_score = None
+    frame_numbers = np.arange(frame_count)
+    for phase in phases:
+        positions = np.rint(phase + frame_numbers * frame_samples).astype(int)
+        valid = positions + null_samples < len(null_energy)
+        score = np.mean(null_energy[positions[valid]])
+        if best_score is None or score < best_score:
+            best_phase = phase
+            best_score = score
+
+    # Track the local null minimum around each predicted frame position.
+    positions = [float(best_phase)]
+    search_radius = max(256, int(frame_samples * 0.01))
+    for _ in range(1, frame_count):
+        expected = positions[-1] + frame_samples
+        start = max(0, int(expected) - search_radius)
+        end = min(len(null_energy), int(expected) + search_radius + 1)
+        if end <= start:
+            break
+        minimum = start + np.argmin(null_energy[start:end])
+        position = float(minimum)
+        # Parabolic interpolation gives sub-sample timing instead of limiting
+        # the clock estimate to integer sample positions.
+        if 0 < minimum < len(null_energy) - 1:
+            left = null_energy[minimum - 1]
+            center = null_energy[minimum]
+            right = null_energy[minimum + 1]
+            curvature = left - 2.0 * center + right
+            if curvature > 0:
+                position += 0.5 * (left - right) / curvature
+        positions.append(position)
+
+    positions = np.asarray(positions)
+    frame_numbers = np.arange(len(positions), dtype=float)
+    if len(positions) < 10:
+        return None, len(positions), None
+
+    # Iteratively fit timing and reject detections that do not follow it.
+    keep = np.ones(len(positions), dtype=bool)
+    for _ in range(4):
+        slope, intercept = np.polyfit(frame_numbers[keep], positions[keep], 1)
+        residual = positions - (intercept + slope * frame_numbers)
+        median_residual = np.median(residual[keep])
+        deviation = np.abs(residual - median_residual)
+        mad = np.median(deviation[keep])
+        limit = max(32.0, 6.0 * mad)
+        new_keep = deviation <= limit
+        if np.array_equal(new_keep, keep):
+            break
+        keep = new_keep
+
+    if np.count_nonzero(keep) < 10:
+        return None, int(np.count_nonzero(keep)), None
+
+    slope, intercept = np.polyfit(frame_numbers[keep], positions[keep], 1)
+    ppm = (frame_samples - slope) / slope * 1000000.0
+    residual = positions[keep] - (intercept + slope * frame_numbers[keep])
+
+    if not np.isfinite(ppm) or abs(ppm) >= 10000.0:
+        ppm = None
+
+    return ppm, int(np.count_nonzero(keep)), float(np.std(residual))
+
+
 def channels():
     dab = {"dab": [
         {"block": "5A", "f_center": 174928000},

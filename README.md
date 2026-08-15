@@ -31,3 +31,17 @@ This is well within normal limits — DAB PPM calibration only requires a few se
 Additionally, `get_fft()` now casts uint8 data to float before applying the ADC offset to
 prevent an overflow error, and channel scanning includes per-channel error handling so one
 failed channel does not abort the entire scan.
+
+## Low-SNR PPM mode
+
+For lower-SNR tuners such as the Fitipower FC0013, use the robust frame-timing mode instead
+of the standard null-gap detector. It uses the known 96 ms DAB frame period and fits timing
+across the complete capture, rejecting bad frame detections:
+
+```text
+python -m cali -m robust -d 1 -c 29 -nsec 20
+```
+
+Use `-d 0` for the R828D, or `-off 200000` if offset tuning is required. A longer capture
+improves the estimate. The robust mode reports the number of frames used and the timing
+residual; a larger residual means the PPM result has lower confidence.
