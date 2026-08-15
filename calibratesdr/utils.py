@@ -120,7 +120,7 @@ def scan_one_dab_channel(dabchannels, channel, sdr, rs, ns, rg, filename, sample
 
     dab_signal_fft_mean = np.mean(dab_signal_fft, axis=0)
     dab_signal_bins = cali.dabplus.dab.signal_level(dab_signal_fft_mean, 200)
-    dab_snr = cali.dabplus.dab.signal_dynamics(dab_signal_bins, 12)
+    dab_snr = cali.dabplus.dab.signal_dynamics(dab_signal_bins, 12, offset=offset, samplerate=samplerate)
 
     if show_graph == True:
         plt.plot(dab_signal_bins)
@@ -131,7 +131,7 @@ def scan_one_dab_channel(dabchannels, channel, sdr, rs, ns, rg, filename, sample
         plt.show()
 
     limit_db = 2.0
-    dab_block_detected = cali.dabplus.dab.block_check(dab_signal_bins, dab_snr, limit_db=limit_db)
+    dab_block_detected = cali.dabplus.dab.block_check(dab_signal_bins, dab_snr, limit_db=limit_db, offset=offset)
 
     del data
 

@@ -237,10 +237,33 @@ def signal_level(data, segment):
     return level
 
 
-def signal_dynamics(data, side):
+def signal_dynamics(data, side, offset=0, samplerate=2048000):
+    if offset == 0:
+        dyn_sides = (np.mean(data[0:side]) + np.mean(data[-side:])) / 2.0
+        dyn_center = np.mean(data[side: -side])
 
-    dyn_sides = (np.mean(data[0:side]) + np.mean(data[-side:])) / 2.0
-    dyn_center = np.mean(data[side: -side])
+        return dyn_center - dyn_sides
+
+    # FIX: with offset tuning the DAB block sits at -offset Hz instead of 0 Hz,
+    # so the block region must be shifted accordingly or the SNR would drop.
+    # data holds binned dB levels spanning [-samplerate/2, samplerate/2] Hz.
+    nbins = len(data)
+    bin_width = samplerate / float(nbins)
+    half_bins = 768000.0 / bin_width
+    center_bin = (samplerate / 2.0 - offset) / bin_width - 0.5
+
+    lo = max(0, int(round(center_bin - half_bins)))
+    hi = min(nbins, int(round(center_bin + half_bins)))
+
+    if hi - lo < 2:
+        return 0.0
+
+    dyn_center = np.mean(data[lo:hi])
+    noise = np.concatenate([data[:lo], data[hi:]])
+    if noise.size == 0:
+        return 0.0
+
+    dyn_sides = np.mean(noise)
 
     return dyn_center - dyn_sides
 
@@ -253,17 +276,21 @@ def signal_dynamics_edges(left, right):
     return np.abs(dyn_left - dyn_right)
 
 
-def block_check(signal_bins, snr, limit_db=2.0):
-    left = signal_dynamics_edges(signal_bins[0 : 20], signal_bins[20 : 20 * 2])
-    right = signal_dynamics_edges(signal_bins[-20 * 2 : -20], signal_bins[-20 : ])
-
+def block_check(signal_bins, snr, limit_db=2.0, offset=0):
     block_detected = 0
 
     if snr > limit_db:
         block_detected = 2
 
-        if np.abs(left - right) > limit_db:
-            block_detected = 1
+        # FIX: the left/right edge comparison only makes sense when the DAB block
+        # is centered (offset == 0). With offset tuning the block is intentionally
+        # shifted off-center, so skip the asymmetry check.
+        if offset == 0:
+            left = signal_dynamics_edges(signal_bins[0 : 20], signal_bins[20 : 20 * 2])
+            right = signal_dynamics_edges(signal_bins[-20 * 2 : -20], signal_bins[-20 : ])
+
+            if np.abs(left - right) > limit_db:
+                block_detected = 1
 
     return block_detected
 
