@@ -182,7 +182,7 @@ if __name__ == "__main__":
                            type=int,
                            help='scan with gain',
                            default=20)
-    my_parser.add_argument('-rd',
+    my_parser.add_argument('-rd', '-d',
                            action='store',
                            type=int,
                            help='scan with device',
