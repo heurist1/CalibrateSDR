@@ -80,10 +80,14 @@ def get_fft(data, samplerate = 2048000):
     return signal_fft
 
 
-def record_with_rtlsdr(sdr, rs, cf, ns, rg, filename):
+def record_with_rtlsdr(sdr, rs, cf, ns, rg, filename, offset=0):
 
     sdr.rs = rs
-    sdr.fc = cf
+    # FIX: optional offset tuning. Some tuners (e.g. Fitipower FC0013) have a strong
+    # noise spike around DC. Tuning to cf + offset moves that spike out of the DAB band
+    # so the null symbol / phase reference detection in get_ppm() works. The PPM value
+    # is derived from the sample-rate (crystal) error, so it is unaffected by the offset.
+    sdr.fc = cf + offset
     sdr.gain = rg
 
     # FIX: Use read_samples() instead of read_bytes_async() for compatibility with some R828D-based devices.
@@ -102,12 +106,12 @@ def record_with_rtlsdr(sdr, rs, cf, ns, rg, filename):
 
     interleaved.tofile(filename)
 
-def scan_one_dab_channel(dabchannels, channel, sdr, rs, ns, rg, filename, samplerate, show_graph, verbose):
+def scan_one_dab_channel(dabchannels, channel, sdr, rs, ns, rg, filename, samplerate, show_graph, verbose, offset=0):
 
     cf = dabchannels["dab"][channel]["f_center"]
     block = dabchannels["dab"][channel]["block"]
 
-    record_with_rtlsdr(sdr, rs, cf, ns, rg, filename)
+    record_with_rtlsdr(sdr, rs, cf, ns, rg, filename, offset)
 
     data = load_data(filename, offset=0)
     dab_ppm = cali.dabplus.dab.get_ppm(data, samplerate=samplerate, show_graph=show_graph, verbose=verbose)

@@ -73,7 +73,7 @@ def main(input):
                     try: # FIX: per-channel try/except so one failed channel doesn't abort the whole scan
                         channel, block, cf, dab_snr, dab_block_detected, dab_ppm = \
                             cali.utils.scan_one_dab_channel(dabchannels, channel, sdr, rs, ns, rg, filename, samplerate,
-                                                            show_graph, verbose)
+                                                            show_graph, verbose, offset=input["offset"])
 
                         result.append([channel, block, cf, dab_snr, dab_block_detected, dab_ppm])
                     except Exception as e:
@@ -86,7 +86,7 @@ def main(input):
                 channel = int(c)
                 channel, block, cf, dab_snr, dab_block_detected, dab_ppm = \
                     cali.utils.scan_one_dab_channel(dabchannels, channel, sdr, rs, ns, rg, filename, samplerate,
-                                                    show_graph, verbose)
+                                                    show_graph, verbose, offset=input["offset"])
 
                 result.append([channel, block, cf, dab_snr, dab_block_detected, dab_ppm])
 
@@ -186,6 +186,12 @@ if __name__ == "__main__":
                            action='store',
                            type=int,
                            help='scan with device',
+                           default=0)
+    my_parser.add_argument('-off', '--offset',
+                           action='store',
+                           type=int,
+                           help='tuner offset in Hz added to the channel center frequency (e.g. 200000 for +200 kHz). '
+                                'Useful for tuners with a DC noise spike such as the Fitipower FC0013',
                            default=0)
     my_parser.add_argument('-nsec',
                            action='store',
