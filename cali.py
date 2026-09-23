@@ -1,5 +1,6 @@
 import argparse
 import os
+import numpy as np
 from tqdm import tqdm
 import time
 import calibratesdr as cali
@@ -78,6 +79,57 @@ def main(input):
             print("channel", channel, block, "at", cf, "Hz")
             print("robust frames used:", frames, "timing residual:", residual, "samples")
             print("robust PPM:", ppm)
+
+        elif mode == "hackrf":
+            print("starting mode: hackrf DAB PPM")
+
+            # FIX: capture with hackrf_transfer (HackRF One in HackRF mode) and
+            # run the robust frame-timing estimator on the signed int8 recording.
+            import shutil
+            import subprocess
+
+            filename = "tmp_hackrf.dat"
+            rs = input["rs"]
+            ns = int(rs * input["nsec"])
+            c = input["c"]
+
+            if c == "all":
+                raise ValueError("hackrf mode requires one channel, for example -c 29")
+
+            channel = int(c)
+            dabchannels = cali.dabplus.dab.channels()
+            cf = dabchannels["dab"][channel]["f_center"] + input["offset"]
+            block = dabchannels["dab"][channel]["block"]
+
+            transfer = shutil.which("hackrf_transfer") or \
+                r"C:\Program Files\PothosSDR\bin\hackrf_transfer.exe"
+
+            # FIX: gains tuned so the DAB envelope spans several ADC LSBs;
+            # -l 16/-g 20 left the signal quantization-limited (~0.4 LSB)
+            # and the null tracking locked onto noise.
+            cmd = [transfer, "-r", filename, "-f", str(cf), "-s", str(rs),
+                   "-n", str(ns), "-l", "40", "-g", "30", "-a", "1"]
+            print("capturing", input["nsec"], "s from", cf, "Hz")
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+
+            if proc.returncode != 0 or not os.path.exists(filename):
+                print("hackrf_transfer failed:",
+                      (proc.stderr or proc.stdout or "no output").strip())
+                return
+
+            data = cali.utils.load_data(filename, offset=0, dtype=np.int8)
+            ppm, frames, residual = cali.dabplus.dab.get_ppm_robust(
+                data, samplerate=rs, adc_offset=0)
+
+            print("channel", channel, block, "at", cf, "Hz")
+            print("robust frames used:", frames, "timing residual:", residual, "samples")
+            print("robust PPM:", ppm)
+
+            del data # FIX: release the memmap or Windows can't delete the file
+            try:
+                os.remove(filename) # FIX: clean up the capture file
+            except OSError:
+                pass
 
         elif mode == "dab":
             print("starting mode: dab")
@@ -191,7 +243,7 @@ if __name__ == "__main__":
                            help='select path to input file')
     my_parser.add_argument('-m',
                            action='store',
-                           choices=['dab', 'robust', 'dvbt', 'gsm'],
+                           choices=['dab', 'robust', 'hackrf', 'dvbt', 'gsm'],
                            help='select mode',
                            default='dab')
     my_parser.add_argument('-s',

@@ -37,8 +37,8 @@ def reduce_outliers(dif):
     return dif
 
 
-def load_data(filename, offset):
-    samples = np.memmap(filename, offset=offset)
+def load_data(filename, offset, dtype=np.uint8): # FIX: dtype param so hackrf_transfer int8 captures can be loaded too
+    samples = np.memmap(filename, offset=offset, dtype=dtype)
     return samples
 
 

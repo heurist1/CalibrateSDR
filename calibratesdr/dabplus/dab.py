@@ -178,17 +178,22 @@ def get_ppm(data, samplerate = 2048000, show_graph = False, verbose=False):
     return ppm
 
 
-def get_ppm_robust(data, samplerate=2048000):
+def get_ppm_robust(data, samplerate=2048000, adc_offset=-127):
     """Estimate PPM from repeated DAB frame timing.
 
     This uses the known 96 ms frame period to track null-symbol positions
     across the complete capture, then fits one timing slope after rejecting
     bad frame detections. It is intended for lower-SNR tuners where the
     independent peak selection in get_ppm() can lock onto noise.
+
+    adc_offset: -127 for RTL-SDR uint8 captures, 0 for HackRF signed int8
+    captures (hackrf_transfer output).
     """
-    adc_offset = -127
     samples = (data[0::2].astype(float) + adc_offset) + \
               1j * (data[1::2].astype(float) + adc_offset)
+    # FIX: remove DC before the envelope; zero-IF LO leakage (large on
+    # HackRF) otherwise dominates |samples| and buries the DAB nulls.
+    samples = samples - (np.mean(samples.real) + 1j * np.mean(samples.imag))
     signal = cali.utils.movingaverage(np.abs(samples), 80)
 
     frame_samples = samplerate * 0.096
